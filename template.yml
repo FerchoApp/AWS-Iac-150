@@ -4,11 +4,7 @@ Description: Arquitectura Mintic con VPC, 2 AZ, 2 Subnets Públicas, 2 EC2 está
 
 Parameters:
   # Parámetro para definir el nombre del par de claves SSH
-  MinticKeyName:
-    Description: Nombre del par de claves SSH
-    Type: AWS::EC2::KeyPair::KeyName
-    Default: ssh-iac-mintic-ec2
-
+ 
   # Parámetro para definir la AMI que usarán las instancias EC2
   MinticAmiId:
     Description: AMI para las instancias EC2
@@ -113,7 +109,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref MinticAmiId
-      InstanceType: t2.micro
+      InstanceType: t3.micro
       KeyName: !Ref MinticKeyName
       NetworkInterfaces:
         - AssociatePublicIpAddress: true
@@ -135,7 +131,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref MinticAmiId
-      InstanceType: t2.micro
+      InstanceType: t3.micro
       KeyName: !Ref MinticKeyName
       NetworkInterfaces:
         - AssociatePublicIpAddress: true
@@ -192,7 +188,7 @@ Resources:
     Properties:
       LaunchTemplateData:
         ImageId: !Ref MinticAmiId
-        InstanceType: t2.micro
+        InstanceType: t3.micro
         KeyName: !Ref MinticKeyName
         SecurityGroupIds:
           - !Ref MinticSecurityGroup
