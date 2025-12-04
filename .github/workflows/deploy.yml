@@ -1,4 +1,4 @@
-name: MinTic Deploy to AWS CloudFormation
+name: MinTic Deploy to AWS CloudFormation (Multi-Stage)
 
 on:
   push:
@@ -6,23 +6,156 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  validate:
+    name: Stage 1 - Validate Templates
     runs-on: ubuntu-latest
-
     steps:
-    - name: MinTic Checkout and download repository
-      uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+      
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Validate VPC template
+        run: aws cloudformation validate-template --template-body file://templates/vpc.yml
+      
+      - name: Validate Security template
+        run: aws cloudformation validate-template --template-body file://templates/security.yml
+      
+      - name: Validate EC2 Static template
+        run: aws cloudformation validate-template --template-body file://templates/ec2-static.yml
+      
+      - name: Validate ALB template
+        run: aws cloudformation validate-template --template-body file://templates/alb.yml
+      
+      - name: Validate ASG template
+        run: aws cloudformation validate-template --template-body file://templates/asg.yml
 
-    - name: MinTic Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
+  vpc:
+    name: Stage 2 - Deploy VPC
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
-    - name: MinTic Deploy CloudFormation stack
-      run: |
-        aws cloudformation deploy \
-          --template-file template.yml \
-          --stack-name MiPrimerStackConGITHUB \
-          --capabilities CAPABILITY_NAMED_IAM
+      - name: Deploy VPC Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file templates/vpc.yml \
+            --stack-name MinticVPCStack \
+            --no-fail-on-empty-changeset
+          echo "VPC Stack deployed"
+
+  security:
+    name: Stage 3 - Deploy Security
+    runs-on: ubuntu-latest
+    needs: vpc
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy Security Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file templates/security.yml \
+            --stack-name MinticSecurityStack \
+            --no-fail-on-empty-changeset
+          echo "Security Stack deployed"
+
+  ec2:
+    name: Stage 4 - Deploy EC2 Static Instances
+    runs-on: ubuntu-latest
+    needs: security
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy EC2 Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file templates/ec2-static.yml \
+            --stack-name MinticEC2Stack \
+            --parameter-overrides \
+              KeyName=KeyNew \
+              AmiId=ami-0f88e80871fd81e91 \
+              InstanceType=t3.micro \
+            --no-fail-on-empty-changeset
+          echo "EC2 Static Stack deployed"
+
+  alb:
+    name: Stage 5 - Deploy ALB
+    runs-on: ubuntu-latest
+    needs: ec2
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy ALB Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file templates/alb.yml \
+            --stack-name MinticALBStack \
+            --no-fail-on-empty-changeset
+          echo "ALB Stack deployed"
+
+  asg:
+    name: Stage 6 - Deploy Auto Scaling Group
+    runs-on: ubuntu-latest
+    needs: alb
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy ASG Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file templates/asg.yml \
+            --stack-name MinticASGStack \
+            --parameter-overrides \
+              KeyName=KeyNew \
+              AmiId=ami-0f88e80871fd81e91 \
+              InstanceType=t3.micro \
+            --no-fail-on-empty-changeset
+          echo "ASG Stack deployed"
+      
+      - name: Show Outputs
+        run: |
+          echo ""
+          echo "Deployment Complete! Stack Outputs:"
+          echo ""
+          echo "VPC Stack:"
+          aws cloudformation describe-stacks --stack-name MinticVPCStack --query 'Stacks[0].Outputs' --output table
+          echo ""
+          echo "EC2 Static Stack:"
+          aws cloudformation describe-stacks --stack-name MinticEC2Stack --query 'Stacks[0].Outputs' --output table
+          echo ""
+          echo "ALB Stack:"
+          aws cloudformation describe-stacks --stack-name MinticALBStack --query 'Stacks[0].Outputs' --output table

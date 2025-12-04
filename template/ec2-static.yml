@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 2 instancias EC2 estáticas en diferentes AZ
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Nombre del par de claves SSH
+    Default: KeyNew
+
+  AmiId:
+    Type: String
+    Description: AMI para instancias EC2
+    Default: ami-0f88e80871fd81e91
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: Tipo de instancia
+
+Resources:
+  MinticEC2AZ1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          SubnetId: !ImportValue MinticVPC-PublicSubnet1
+          DeviceIndex: 0
+          GroupSet:
+            - !ImportValue MinticSecurity-SG
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl enable --now httpd
+          echo "<html><body><h1>Hola desde EC2 AZ1 - $(hostname -f)</h1></body></html>" > /var/www/html/index.html
+      Tags:
+        - Key: Name
+          Value: MinticEC2-AZ1
+
+  MinticEC2AZ2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          SubnetId: !ImportValue MinticVPC-PublicSubnet2
+          DeviceIndex: 0
+          GroupSet:
+            - !ImportValue MinticSecurity-SG
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl enable --now httpd
+          echo "<html><body><h1>Hola desde EC2 AZ2 - $(hostname -f)</h1></body></html>" > /var/www/html/index.html
+      Tags:
+        - Key: Name
+          Value: MinticEC2-AZ2
+
+Outputs:
+  EC2AZ1PublicIP:
+    Description: IP pública EC2 AZ1
+    Value: !GetAtt MinticEC2AZ1.PublicIp
+
+  EC2AZ2PublicIP:
+    Description: IP pública EC2 AZ2
+    Value: !GetAtt MinticEC2AZ2.PublicIp

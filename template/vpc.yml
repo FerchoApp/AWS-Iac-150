@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Crea la VPC, subredes públicas, IGW y tabla de rutas para Mintic
+
+Resources:
+  # VPC principal para alojar todos los recursos
+  MinticVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: MinticVPC
+
+  # Gateway de Internet para permitir acceso externo
+  MinticInternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  # Asociación del IGW con la VPC
+  MinticAttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MinticVPC
+      InternetGatewayId: !Ref MinticInternetGateway
+
+  # Subred pública en la zona us-east-1a
+  MinticPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MinticVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: MinticPublicSubnet1
+
+  # Subred pública en la zona us-east-1b
+  MinticPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MinticVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: us-east-1b
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: MinticPublicSubnet2
+
+  # Tabla de rutas para las subredes públicas
+  MinticRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MinticVPC
+
+  # Ruta predeterminada hacia el IGW
+  MinticPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: MinticAttachGateway
+    Properties:
+      RouteTableId: !Ref MinticRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MinticInternetGateway
+
+  # Asociación de tabla de rutas con subred 1
+  MinticSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MinticPublicSubnet1
+      RouteTableId: !Ref MinticRouteTable
+
+  # Asociación de tabla de rutas con subred 2
+  MinticSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MinticPublicSubnet2
+      RouteTableId: !Ref MinticRouteTable
+
+Outputs:
+  # Exporta el valor de la VPC
+  VPCId:
+    Value: !Ref MinticVPC
+    Export:
+      Name: Mintic-VPCId
+
+  # Exporta el valor de la subred correspondiente
+  SubnetPublic1:
+    Value: !Ref MinticPublicSubnet1
+    Export:
+      Name: Mintic-SubnetPublic1
+
+  # Exporta el valor de la subred correspondiente
+  SubnetPublic2:
+    Value: !Ref MinticPublicSubnet2
+    Export:
+      Name: Mintic-SubnetPublic2

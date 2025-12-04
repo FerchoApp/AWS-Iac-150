@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Auto Scaling Group con LaunchTemplate y WarmPool
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Nombre del par de claves SSH
+    Default: KeyNew
+
+  AmiId:
+    Type: String
+    Description: AMI para instancias EC2
+    Default: ami-0f88e80871fd81e91
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: Tipo de instancia
+
+Resources:
+  MinticLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: MinticLaunchTemplate
+      LaunchTemplateData:
+        ImageId: !Ref AmiId
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        SecurityGroupIds:
+          - !ImportValue MinticSecurity-SG
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl enable --now httpd
+            echo "<html><body><h1>¡Hola desde ASG $(hostname -f)!</h1></body></html>" > /var/www/html/index.html
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: MinticASG-Instance
+
+  MinticASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: MinticASG
+      VPCZoneIdentifier:
+        - !ImportValue MinticVPC-PublicSubnet1
+        - !ImportValue MinticVPC-PublicSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref MinticLaunchTemplate
+        Version: !GetAtt MinticLaunchTemplate.LatestVersionNumber
+      MinSize: '2'
+      MaxSize: '4'
+      DesiredCapacity: '2'
+      TargetGroupARNs:
+        - !ImportValue MinticALB-TargetGroupArn
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: MinticASG
+          PropagateAtLaunch: true
+
+  MinticWarmPool:
+    Type: AWS::AutoScaling::WarmPool
+    Properties:
+      AutoScalingGroupName: !Ref MinticASG
+      PoolState: Stopped
+      MinSize: 1
+      MaxGroupPreparedCapacity: 3
+
+Outputs:
+  ASGName:
+    Description: Nombre del Auto Scaling Group
+    Value: !Ref MinticASG
+
+  LaunchTemplateId:
+    Description: ID del Launch Template
+    Value: !Ref MinticLaunchTemplate

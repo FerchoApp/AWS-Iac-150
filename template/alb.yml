@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Application Load Balancer con TargetGroup y Listener
+
+Resources:
+  MinticALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: MinticALB
+      Subnets:
+        - !ImportValue MinticVPC-PublicSubnet1
+        - !ImportValue MinticVPC-PublicSubnet2
+      SecurityGroups:
+        - !ImportValue MinticSecurity-SG
+      Scheme: internet-facing
+      Type: application
+      Tags:
+        - Key: Name
+          Value: MinticALB
+
+  MinticTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !ImportValue MinticVPC-ID
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Tags:
+        - Key: Name
+          Value: MinticTargetGroup
+
+  MinticListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref MinticALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MinticTargetGroup
+
+Outputs:
+  ALBDNSName:
+    Description: DNS del Application Load Balancer
+    Value: !GetAtt MinticALB.DNSName
+    Export:
+      Name: MinticALB-DNS
+
+  TargetGroupArn:
+    Description: ARN del Target Group
+    Value: !Ref MinticTargetGroup
+    Export:
+      Name: MinticALB-TargetGroupArn
