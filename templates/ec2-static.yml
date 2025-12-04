@@ -5,7 +5,7 @@ Parameters:
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Nombre del par de claves SSH
-    Default: KeyNew
+    Default: claves
 
   AmiId:
     Type: String
