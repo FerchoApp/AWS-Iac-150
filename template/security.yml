@@ -1,27 +1,30 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Grupo de seguridad compartido para acceso HTTP
+Description: Security Group para instancias EC2 y ALB
 
 Resources:
-
-  # Grupo de seguridad que permite tráfico HTTP desde cualquier lugar
   MinticSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Acceso HTTP desde cualquier lugar
-      VpcId:
-        Fn::ImportValue: Mintic-VPCId
+      GroupDescription: Acceso HTTP y SSH
+      VpcId: !ImportValue MinticVPC-ID
       SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH access
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: HTTP access
       Tags:
         - Key: Name
           Value: MinticSecurityGroup
 
 Outputs:
-  # Exporta el SecurityGroupId como Mintic-SecurityGroupId para que lo usen EC2, ASG y ALB.
   SecurityGroupId:
+    Description: ID del Security Group
     Value: !Ref MinticSecurityGroup
     Export:
-      Name: Mintic-SecurityGroupId
+      Name: MinticSecurity-SG
